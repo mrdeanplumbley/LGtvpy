@@ -103,6 +103,28 @@ Common app ids: `netflix`, `youtube.leanback.v4`, `amazon`, `com.disney.disneypl
 
 Categories, keys and values: see [SETTINGS.md](SETTINGS.md).
 
+## Profiles (TOML presets)
+
+| Method | Description |
+|---|---|
+| `tv.apply_profile(path_or_dict, dry_run=False)` | Apply a whole TV state from a `.toml` file (or a parsed dict). Returns the list of steps taken. |
+| `tv.capture_profile(name=None)` | Read the current input/volume/picture/sound into a profile dict. |
+
+The `lgtvpy.profiles` module has the underlying helpers: `load(path)`, `validate(profile)`, `plan(profile)` (human-readable steps, no TV needed), `apply(tv, profile, dry_run=False, settle=0.4)`, `capture(tv, name=None)`, and `dumps(profile)` (serialise back to TOML).
+
+```python
+from lgtvpy import LGTV, profiles
+
+with LGTV() as tv:
+    tv.apply_profile("profiles/game.toml")
+
+    snapshot = tv.capture_profile(name="My look")
+    with open("my_look.toml", "w", encoding="utf-8") as f:
+        f.write(profiles.dumps(snapshot))
+```
+
+Profile schema and the two-phase picture-mode behaviour are documented in the module docstring and the README. When a `[picture]` table names `pictureMode` alongside other keys, the mode is applied first (in its own call) so it doesn't reload the preset's stored values over the ones you set — verified on webOS 25.
+
 ## Info & raw access
 
 | Method | Description |

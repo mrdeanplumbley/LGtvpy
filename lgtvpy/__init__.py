@@ -9,6 +9,7 @@ Quick start::
         tv.notify("Hello from Python!")
 """
 
+from . import profiles
 from .client import (
     LGTVError,
     PairingError,
@@ -31,4 +32,5 @@ __all__ = [
     "RequestTimeout",
     "BUTTONS",
     "send_magic_packet",
+    "profiles",
 ]

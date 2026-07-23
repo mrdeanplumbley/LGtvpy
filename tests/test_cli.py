@@ -82,6 +82,11 @@ class FakeLGTV:
     def request(self, uri, payload=None):
         self._rec("request", uri, payload); return {"echo": True}
 
+    # profiles
+    def capture_profile(self, name=None):
+        self._rec("capture_profile", name)
+        return {"name": name or "Captured", "picture": {"backlight": 55}}
+
 
 @pytest.fixture
 def fake_cli(monkeypatch):
@@ -225,6 +230,61 @@ def test_raw_with_payload(fake_cli):
 
 def test_apps_output_is_trimmed(fake_cli):
     assert run_cli(["apps"]) == [{"id": "netflix", "title": "Netflix"}]
+
+
+FILM_TOML = """
+name = "Film"
+volume = 14
+
+[picture]
+pictureMode = "filmMaker"
+backlight = 60
+
+[sound]
+soundMode = "movie"
+"""
+
+
+def _write_profile(tmp_path, text=FILM_TOML):
+    path = tmp_path / "film.toml"
+    path.write_text(text, encoding="utf-8")
+    return str(path)
+
+
+def test_profile_show_needs_no_connection(fake_cli, tmp_path):
+    result = run_cli(["profile", "show", _write_profile(tmp_path)])
+    assert result["profile"] == "Film"
+    assert result["actions"][0] == "set picture: pictureMode=filmMaker, backlight=60"
+    # 'show' must not construct/connect a TV
+    assert FakeLGTV.last is None
+
+
+def test_profile_apply_dry_run_touches_nothing(fake_cli, tmp_path):
+    result = run_cli(["profile", "apply", _write_profile(tmp_path), "--dry-run"])
+    assert "Would apply" in result
+    assert calls() == []  # no set_* calls
+
+
+def test_profile_apply_drives_tv(fake_cli, tmp_path, monkeypatch):
+    import lgtvpy.profiles as profiles_mod
+
+    monkeypatch.setattr(profiles_mod.time, "sleep", lambda s: None)
+    run_cli(["profile", "apply", _write_profile(tmp_path)])
+    # pictureMode applied first (own call), then remaining picture keys, then sound, volume
+    assert ("set_settings", "picture", {"pictureMode": "filmMaker"}) in calls()
+    assert ("set_settings", "picture", {"backlight": 60}) in calls()
+    assert ("set_settings", "sound", {"soundMode": "movie"}) in calls()
+    assert ("set_volume", 14) in calls()
+
+
+def test_profile_save_writes_file(fake_cli, tmp_path):
+    out = tmp_path / "snapshot.toml"
+    run_cli(["profile", "save", str(out), "--name", "My look"])
+    assert ("capture_profile", "My look") in calls()
+    text = out.read_text(encoding="utf-8")
+    assert 'name = "My look"' in text
+    assert "[picture]" in text
+    assert "backlight = 55" in text
 
 
 def test_main_returns_error_code_on_lgtv_error(fake_cli, monkeypatch, capsys):

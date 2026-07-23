@@ -1,0 +1,23 @@
+# Best settings for gaming (console or PC) - bright, sharp, low input lag.
+# Apply with:  lgtv profile apply profiles/game.toml
+#
+# Game picture mode enables the TV's low-latency path. Set `input` to
+# whichever HDMI your console/PC is on to switch to it in one go.
+
+name = "Game — low latency"
+description = "Game mode, bright and punchy, with game sound."
+
+# input = "HDMI_2"     # uncomment and set your console/PC input
+volume = 16
+
+[picture]
+pictureMode = "game"       # engages the low-input-lag game path
+backlight = 100            # maximum brightness
+contrast = 90
+brightness = 50
+color = 55
+sharpness = 10
+energySaving = "off"
+
+[sound]
+soundMode = "game"

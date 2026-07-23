@@ -8,9 +8,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from . import config as _config
+from . import profiles
 from .client import LGTVError
 from .keys import BUTTONS
 from .tv import LGTV
@@ -130,6 +132,27 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("key")
     s.add_argument("value")
 
+    p = add("profile", help="apply/show/save a TOML settings profile")
+    profile_sub = p.add_subparsers(dest="profile_command", required=True)
+    pa = profile_sub.add_parser(
+        "apply", parents=[common], help="apply a profile: profile apply film.toml"
+    )
+    pa.add_argument("file", help="path to a .toml profile")
+    pa.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print what would change without touching the TV",
+    )
+    psh = profile_sub.add_parser(
+        "show", help="print a profile's planned actions (no connection)"
+    )
+    psh.add_argument("file", help="path to a .toml profile")
+    psv = profile_sub.add_parser(
+        "save", parents=[common], help="capture current TV settings to a .toml file"
+    )
+    psv.add_argument("file", help="path to write")
+    psv.add_argument("--name", help="name to record in the profile")
+
     p = add("picture-mode", help="e.g. cinema, filmMaker, game, expert1")
     p.add_argument("mode")
     p = add("sound-mode", help="e.g. aiSoundPlus, standard, movie")
@@ -154,6 +177,14 @@ def run(args: argparse.Namespace) -> Any:  # noqa: C901 - simple dispatch table
         tv = LGTV(args.ip, timeout=args.timeout)
         tv.power_on(mac=args.mac)
         return f"Magic packet sent to {tv.ip}. The TV should wake shortly."
+
+    # 'profile show' just parses the file - no TV needed.
+    if cmd == "profile" and args.profile_command == "show":
+        profile = profiles.load(args.file)
+        return {
+            "profile": profile.get("name", args.file),
+            "actions": profiles.plan(profile),
+        }
 
     with LGTV(args.ip, timeout=args.timeout, on_pair_prompt=_pair_prompt) as tv:
         if cmd == "pair":
@@ -279,6 +310,18 @@ def run(args: argparse.Namespace) -> Any:  # noqa: C901 - simple dispatch table
                 return tv.get_settings(args.category, args.keys or None)
             tv.set_settings(args.category, {args.key: _parse_value(args.value)})
             return f"Set {args.category}.{args.key} = {args.value}"
+
+        if cmd == "profile":
+            if args.profile_command == "apply":
+                profile = profiles.load(args.file)
+                steps = profiles.apply(tv, profile, dry_run=args.dry_run)
+                label = profile.get("name", args.file)
+                verb = "Would apply" if args.dry_run else "Applied"
+                return {verb: label, "steps": steps}
+            # save
+            profile = tv.capture_profile(name=args.name)
+            Path(args.file).write_text(profiles.dumps(profile), encoding="utf-8")
+            return f"Saved current settings to {args.file}"
 
         if cmd == "picture-mode":
             tv.set_picture_mode(args.mode)
