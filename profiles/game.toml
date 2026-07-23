@@ -17,7 +17,17 @@ contrast = 90
 brightness = 50
 color = 55
 sharpness = 10
-energySaving = "off"
+tint = 0
+colorTemperature = 0         # 0 = D65 reference in expert modes; go negative for warmer
+gamma = "medium"             # ~2.2, matches sRGB desktop content
+colorGamut = "native"        # let novideo_srgb do the clamping, not the TV
+energySaving = "off"         # critical - otherwise backlight changes get ignored
+peakBrightness = "off"       # stops highlight pumping on a static desktop
+dynamicContrast = "off"
+truMotionMode = "off"
+realCinema = "off"
+noiseReduction = "off"
+mpegNoiseReduction = "off"
 
 [sound]
 soundMode = "game"
