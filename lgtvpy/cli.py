@@ -50,81 +50,96 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("pair", help="pair with the TV (first time: lgtv pair --ip <tv-ip>)")
-    sub.add_parser("status", help="power / app / volume summary")
-    sub.add_parser("info", help="system info (model, firmware)")
-    sub.add_parser("sw-info", help="software info (includes MAC address)")
+    # Accept --ip/--timeout after the subcommand too (lgtv pair --ip 10.0.0.5).
+    # SUPPRESS keeps the subparser from clobbering a value parsed by the root.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--ip", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    common.add_argument(
+        "--timeout", type=float, default=argparse.SUPPRESS, help=argparse.SUPPRESS
+    )
 
-    p = sub.add_parser("on", help="power on via Wake-on-LAN")
+    def add(name: str, **kwargs):
+        return sub.add_parser(name, parents=[common], **kwargs)
+
+    add("pair", help="pair with the TV (first time: lgtv pair --ip <tv-ip>)")
+    add("status", help="power / app / volume summary")
+    add("info", help="system info (model, firmware)")
+    add("sw-info", help="software info (includes MAC address)")
+
+    p = add("on", help="power on via Wake-on-LAN")
     p.add_argument("--mac", help="TV MAC address (auto-stored after first pairing)")
-    sub.add_parser("off", help="power off (standby)")
-    sub.add_parser("screen-off", help="panel off, apps/audio keep running")
-    sub.add_parser("screen-on", help="panel back on")
+    add("off", help="power off (standby)")
+    add("screen-off", help="panel off, apps/audio keep running")
+    add("screen-on", help="panel back on")
 
-    p = sub.add_parser("vol", help="show or set volume: vol | vol 15 | vol up|down")
+    p = add("vol", help="show or set volume: vol | vol 15 | vol up|down")
     p.add_argument("level", nargs="?", help="0-100, 'up' or 'down'")
-    p = sub.add_parser("mute", help="mute on|off, or toggle with no argument")
+    p = add("mute", help="mute on|off, or toggle with no argument")
     p.add_argument("state", nargs="?", choices=["on", "off"])
-    p = sub.add_parser("sound-output", help="show or set sound output")
+    p = add("sound-output", help="show or set sound output")
     p.add_argument(
         "output", nargs="?", help="e.g. tv_speaker, external_arc, bt_soundbar"
     )
 
-    sub.add_parser("apps", help="list installed apps")
-    sub.add_parser("app", help="show foreground app id")
-    p = sub.add_parser("launch", help="launch an app by id")
+    add("apps", help="list installed apps")
+    add("app", help="show foreground app id")
+    p = add("launch", help="launch an app by id")
     p.add_argument("app_id", help="e.g. netflix, youtube.leanback.v4")
     p.add_argument("--params", help="JSON params for the app")
-    p = sub.add_parser("close", help="close an app by id")
+    p = add("close", help="close an app by id")
     p.add_argument("app_id")
-    p = sub.add_parser("open", help="open a URL in the TV browser")
+    p = add("open", help="open a URL in the TV browser")
     p.add_argument("url")
 
-    sub.add_parser("inputs", help="list HDMI/external inputs")
-    p = sub.add_parser("input", help="switch input")
+    add("inputs", help="list HDMI/external inputs")
+    p = add("input", help="switch input")
     p.add_argument("input_id", help="e.g. HDMI_1, HDMI_2")
 
-    p = sub.add_parser("channel", help="channel up|down|<number>")
+    p = add("channel", help="channel up|down|<number>")
     p.add_argument("target", help="'up', 'down' or a channel number/id")
-    sub.add_parser("channels", help="list TV channels")
+    add("channels", help="list TV channels")
 
-    p = sub.add_parser("media", help="playback control")
+    p = add("media", help="playback control")
     p.add_argument("action", choices=["play", "pause", "stop", "rewind", "ff"])
 
-    p = sub.add_parser("button", help="press remote button(s), e.g. button HOME")
+    p = add("button", help="press remote button(s), e.g. button HOME")
     p.add_argument("names", nargs="+", metavar="NAME")
     p.add_argument("--repeat", type=int, default=1)
-    sub.add_parser("buttons", help="list known button names")
+    add("buttons", help="list known button names")
 
-    p = sub.add_parser("text", help="type text into the focused field on the TV")
+    p = add("text", help="type text into the focused field on the TV")
     p.add_argument("text")
-    sub.add_parser("enter", help="press Enter in the focused text field")
-    p = sub.add_parser("delete", help="delete characters in the focused field")
+    add("enter", help="press Enter in the focused text field")
+    p = add("delete", help="delete characters in the focused field")
     p.add_argument("count", nargs="?", type=int, default=1)
 
-    p = sub.add_parser("notify", help="show a toast message on the TV")
+    p = add("notify", help="show a toast message on the TV")
     p.add_argument("message")
 
-    p = sub.add_parser("settings", help="read/write system settings")
+    p = add("settings", help="read/write system settings")
     settings_sub = p.add_subparsers(dest="settings_command", required=True)
-    g = settings_sub.add_parser("get", help="settings get picture [keys...]")
+    g = settings_sub.add_parser(
+        "get", parents=[common], help="settings get picture [keys...]"
+    )
     g.add_argument("category")
     g.add_argument("keys", nargs="*")
-    s = settings_sub.add_parser("set", help="settings set picture backlight 40")
+    s = settings_sub.add_parser(
+        "set", parents=[common], help="settings set picture backlight 40"
+    )
     s.add_argument("category")
     s.add_argument("key")
     s.add_argument("value")
 
-    p = sub.add_parser("picture-mode", help="e.g. cinema, filmMaker, game, expert1")
+    p = add("picture-mode", help="e.g. cinema, filmMaker, game, expert1")
     p.add_argument("mode")
-    p = sub.add_parser("sound-mode", help="e.g. aiSoundPlus, standard, movie")
+    p = add("sound-mode", help="e.g. aiSoundPlus, standard, movie")
     p.add_argument("mode")
-    p = sub.add_parser("backlight", help="OLED light / backlight 0-100")
+    p = add("backlight", help="OLED light / backlight 0-100")
     p.add_argument("level", type=int)
-    p = sub.add_parser("energy-saving", help="off, min, med, max, auto")
+    p = add("energy-saving", help="off, min, med, max, auto")
     p.add_argument("level")
 
-    p = sub.add_parser("raw", help="send a raw ssap:// request")
+    p = add("raw", help="send a raw ssap:// request")
     p.add_argument("uri", help="e.g. ssap://audio/getVolume")
     p.add_argument("payload", nargs="?", help="JSON payload")
 
@@ -138,7 +153,7 @@ def run(args: argparse.Namespace) -> Any:  # noqa: C901 - simple dispatch table
     if cmd == "on":
         tv = LGTV(args.ip, timeout=args.timeout)
         tv.power_on(mac=args.mac)
-        return f"Magic packet sent to {args.ip}. The TV should wake shortly."
+        return f"Magic packet sent to {tv.ip}. The TV should wake shortly."
 
     with LGTV(args.ip, timeout=args.timeout, on_pair_prompt=_pair_prompt) as tv:
         if cmd == "pair":

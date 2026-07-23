@@ -188,6 +188,26 @@ Full method reference: [docs/API.md](docs/API.md). Example scripts (movie-night 
 | Occasional `Could not connect` / connection reset | The TV rate-limits rapid back-to-back connections. The client already retries 3×; just re-run the command if it still slips through. |
 | `lgtv info` shows firmware fields instead of model name | Newer firmware (webOS 25) blocks the model-info endpoint for third-party clients; the tool falls back to software info automatically. |
 
+## Development & tests
+
+```bash
+pip install -e ".[test]"
+```
+
+```bash
+pytest
+```
+
+The unit suite (~80 tests) runs fully offline — a scripted fake TV answers the SSAP protocol — so it works in CI. There's also an opt-in **live** suite of read-only checks against your real, already-paired TV (it must be on; nothing is changed):
+
+```bash
+LGTV_LIVE=1 pytest -m live          # bash
+```
+
+```powershell
+$env:LGTV_LIVE="1"; pytest -m live  # PowerShell
+```
+
 ## Notes
 
 - The pairing key in `~/.lgtv/config.json` grants control of the TV to anyone who has it — treat it like a password on shared machines.
