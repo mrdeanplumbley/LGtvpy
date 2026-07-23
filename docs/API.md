@@ -7,12 +7,14 @@ from lgtvpy import LGTV
 ## Connecting
 
 ```python
-tv = LGTV()                              # defaults to 192.168.1.61
-tv = LGTV("192.168.1.61", timeout=10.0)  # explicit
+tv = LGTV()                              # defaults to the TV you've paired
+tv = LGTV("192.168.1.61", timeout=10.0)  # explicit IP
 
 with LGTV() as tv:                       # recommended: auto connect + close
     ...
 ```
+
+With no `ip`, the paired TV from `~/.lgtv/config.json` is used (works when exactly one TV is paired; otherwise pass the IP).
 
 - `LGTV(ip=None, client_key=None, config_path=None, timeout=10.0, on_pair_prompt=None)`
   — `client_key` overrides the stored key; `on_pair_prompt` is a callback fired when the TV shows the pairing dialog.

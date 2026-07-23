@@ -4,7 +4,7 @@ Quick start::
 
     from lgtvpy import LGTV
 
-    with LGTV("192.168.1.61") as tv:
+    with LGTV() as tv:  # defaults to your paired TV; or LGTV("192.168.1.61")
         tv.set_volume(15)
         tv.notify("Hello from Python!")
 """

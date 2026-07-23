@@ -11,7 +11,7 @@ from lgtvpy import LGTV
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "on"
 
-with LGTV("192.168.1.61") as tv:
+with LGTV() as tv:  # defaults to your paired TV
     if mode == "on":
         tv.set_input("HDMI_2")
         tv.set_picture_mode("game")

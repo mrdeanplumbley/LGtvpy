@@ -1,6 +1,6 @@
 """Tiny JSON config store for pairing keys and TV MAC addresses.
 
-Stored at ``~/.lgtv/config.json``::
+Stored at ``~/.lgtv/config.json``, keyed by TV IP::
 
     {
       "192.168.1.61": {
@@ -8,6 +8,9 @@ Stored at ``~/.lgtv/config.json``::
         "mac": "aa:bb:cc:dd:ee:ff"
       }
     }
+
+Commands that don't specify an IP use :func:`get_default_ip`: when exactly
+one TV has been paired, that's the default.
 """
 
 from __future__ import annotations
@@ -16,7 +19,6 @@ import json
 from pathlib import Path
 from typing import Optional
 
-DEFAULT_IP = "192.168.1.61"
 DEFAULT_PATH = Path.home() / ".lgtv" / "config.json"
 
 
@@ -34,6 +36,12 @@ def save(cfg: dict, path: Optional[Path] = None) -> None:
     path = path or DEFAULT_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def get_default_ip(path: Optional[Path] = None) -> Optional[str]:
+    """The IP to use when none was given: the single paired TV, else None."""
+    tvs = list(load(path))
+    return tvs[0] if len(tvs) == 1 else None
 
 
 def get_tv(ip: str, path: Optional[Path] = None) -> dict:

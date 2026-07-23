@@ -9,7 +9,7 @@ Example::
 
     from lgtvpy import LGTV
 
-    with LGTV("192.168.1.61") as tv:
+    with LGTV() as tv:  # defaults to your paired TV; or LGTV("192.168.1.61")
         tv.set_volume(12)
         tv.set_input("HDMI_2")
         tv.set_picture_settings({"backlight": 40, "contrast": 85})
@@ -53,7 +53,13 @@ class LGTV:
         timeout: float = 10.0,
         on_pair_prompt: Optional[Callable[[], None]] = None,
     ):
-        self.ip = ip or _config.DEFAULT_IP
+        resolved = ip or _config.get_default_ip(config_path)
+        if not resolved:
+            raise LGTVError(
+                "No TV IP given and no single paired TV to default to. "
+                "Pass ip='...' (CLI: --ip), or pair first: lgtv pair --ip <tv-ip>"
+            )
+        self.ip = resolved
         self._config_path = config_path
         self._explicit_key = client_key
         self.timeout = timeout
