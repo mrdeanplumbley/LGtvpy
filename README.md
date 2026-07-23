@@ -101,6 +101,36 @@ lgtv settings set picture pictureMode expert2
 
 See [docs/SETTINGS.md](docs/SETTINGS.md) for the full list of categories, keys and values.
 
+### Profiles — save a whole look in a TOML file
+
+Rather than run a dozen `settings set` commands, describe a full TV state (picture, sound, input, volume…) in a `.toml` file and apply it in one go. Two ready-made presets ship in [profiles/](profiles/): **film** (accurate Filmmaker mode) and **game** (low-latency Game mode).
+
+```bash
+lgtv profile apply profiles/film.toml     # best picture for movies
+lgtv profile apply profiles/game.toml     # bright, low-lag gaming
+lgtv profile apply profiles/film.toml --dry-run   # preview, don't touch the TV
+lgtv profile show profiles/game.toml      # print the planned steps (no connection)
+lgtv profile save my_look.toml --name "My look"   # capture the TV's CURRENT settings to a file
+```
+
+A profile looks like this — top-level keys are actions, each `[table]` is a settings category (any category/key from [docs/SETTINGS.md](docs/SETTINGS.md) works):
+
+```toml
+name = "Film"
+input = "HDMI_1"      # optional: switch input first
+volume = 14           # optional
+
+[picture]
+pictureMode = "filmMaker"
+backlight = 60
+contrast = 85
+
+[sound]
+soundMode = "movie"
+```
+
+Tune the picture on the TV until it looks right, `lgtv profile save mylook.toml` to snapshot it, then re-apply any time. When a `[picture]` table sets `pictureMode` **and** other keys, the mode is applied first (on its own) so switching it doesn't wipe your tuned values.
+
 ### Remote control & text
 
 ```bash
@@ -149,6 +179,10 @@ with LGTV() as tv:                      # your paired TV; or LGTV("192.168.1.61"
     tv.set_picture_settings({"backlight": 40, "contrast": 85})
     tv.set_settings("sound", {"soundMode": "movie"})
     print(tv.get_picture_settings())
+
+    # Profiles - apply a whole look from a TOML file, or snapshot the current one:
+    tv.apply_profile("profiles/film.toml")
+    snapshot = tv.capture_profile(name="My look")   # -> a dict you can lgtvpy.profiles.dumps()
 
 # Power on works while the TV is off (Wake-on-LAN):
 LGTV().power_on()

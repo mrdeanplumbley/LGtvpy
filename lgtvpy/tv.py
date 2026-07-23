@@ -442,6 +442,27 @@ class LGTV:
         self.set_settings("sound", {"soundMode": mode})
 
     # ------------------------------------------------------------------ #
+    # Profiles (load a whole TV state from a TOML file)
+    # ------------------------------------------------------------------ #
+
+    def apply_profile(self, profile, dry_run: bool = False) -> List[str]:
+        """Apply a settings profile - a path to a .toml file or a parsed dict.
+
+        Returns the list of steps taken. See :mod:`lgtvpy.profiles`.
+        """
+        from . import profiles as _profiles
+
+        if isinstance(profile, (str, Path)):
+            profile = _profiles.load(profile)
+        return _profiles.apply(self, profile, dry_run=dry_run)
+
+    def capture_profile(self, name: Optional[str] = None) -> dict:
+        """Read the current input/volume/picture/sound state into a profile dict."""
+        from . import profiles as _profiles
+
+        return _profiles.capture(self, name=name)
+
+    # ------------------------------------------------------------------ #
     # Info / status
     # ------------------------------------------------------------------ #
 
