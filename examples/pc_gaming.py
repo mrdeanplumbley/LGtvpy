@@ -15,7 +15,7 @@ with LGTV() as tv:  # defaults to your paired TV
     if mode == "on":
         tv.set_input("HDMI_2")
         tv.set_picture_mode("game")
-        tv.set_picture_settings({"backlight": 80})
+        tv.set_picture_settings({"backlight": 100})
         tv.set_sound_mode("game")
         tv.notify("Game mode on")
     else:

@@ -18,27 +18,8 @@ pip install -e .
 
 This installs the one dependency (`websocket-client`) and gives you the `lgtv` command. Alternatively `pip install -r requirements.txt` and use `python -m lgtvpy` instead of `lgtv`.
 
-> **`lgtv` not recognized?** Your Python `Scripts` folder isn't on PATH. Either add it (below), or just use `python -m lgtvpy ...` — identical behaviour.
+> **`lgtv` not recognized?** Your Python `Scripts` folder isn't on PATH. Either add it, or just use `python -m lgtvpy ...` — identical behaviour.
 
-#### Adding Scripts to PATH - Windows Powershell
-```powershell
-$dir = py -c "import sysconfig; print(sysconfig.get_path('scripts','nt_user'))"
-$old = [Environment]::GetEnvironmentVariable('Path','User')
-if ($old -notlike "*$dir*") {
-    [Environment]::SetEnvironmentVariable('Path', ($old.TrimEnd(';') + ';' + $dir), 'User')
-}
-$env:Path += ";$dir"
-```
-
-#### Adding Scripts to PATH - Linux
-```bash
-dir="$(python3 -m site --user-base)/bin"
-case ":$PATH:" in
-  *":$dir:"*) ;;
-  *) echo "export PATH=\"\$PATH:$dir\"" >> ~/.bashrc ;;
-esac
-export PATH="$PATH:$dir"
-```
 
 ### First-time pairing
 
