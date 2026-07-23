@@ -1,0 +1,33 @@
+# Apply with:  lgtv profile apply profiles/pc-desktop.toml
+#
+# Priorities here are flat, predictable brightness and no auto-dimming, since
+# nothing is worse than the panel shifting under you mid-session. Expert (Dark
+# Room) is used instead of Filmmaker because it exposes gamma and colorGamut,
+# which matter when you're clamping on the GPU with novideo_srgb.
+
+name = "PC — desktop"
+description = "Accurate SDR desktop, dimmed panel, all processing off."
+
+# input = "HDMI_2"     # uncomment if the PC lives on a fixed port
+
+[picture]
+pictureMode = "expert2"      # Expert (Dark Room); "filmMaker" is fine too
+backlight = 45               # low for static UI - eye comfort and panel wear
+contrast = 85
+brightness = 50              # black level, reference
+color = 50
+sharpness = 0                # any sharpening wrecks text
+tint = 0
+colorTemperature = 0         # 0 = D65 reference in expert modes; go negative for warmer
+gamma = "medium"             # ~2.2, matches sRGB desktop content
+colorGamut = "native"        # let novideo_srgb do the clamping, not the TV
+energySaving = "off"         # critical - otherwise backlight changes get ignored
+peakBrightness = "off"       # stops highlight pumping on a static desktop
+dynamicContrast = "off"
+truMotionMode = "off"
+realCinema = "off"
+noiseReduction = "off"
+mpegNoiseReduction = "off"
+
+[sound]
+soundMode = "standard"
