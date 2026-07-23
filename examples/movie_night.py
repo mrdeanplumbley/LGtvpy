@@ -7,7 +7,7 @@
 
 from lgtvpy import LGTV
 
-with LGTV("192.168.1.61") as tv:
+with LGTV() as tv:  # defaults to your paired TV
     tv.set_picture_mode("filmMaker")
     tv.set_picture_settings({"backlight": 35})
     tv.set_sound_mode("movie")

@@ -42,15 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--ip",
-        default=_config.DEFAULT_IP,
-        help=f"TV IP address (default: {_config.DEFAULT_IP})",
+        default=None,
+        help="TV IP address (default: the TV you've paired)",
     )
     parser.add_argument(
         "--timeout", type=float, default=10.0, help="request timeout in seconds"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("pair", help="pair with the TV (first-time setup)")
+    sub.add_parser("pair", help="pair with the TV (first time: lgtv pair --ip <tv-ip>)")
     sub.add_parser("status", help="power / app / volume summary")
     sub.add_parser("info", help="system info (model, firmware)")
     sub.add_parser("sw-info", help="software info (includes MAC address)")

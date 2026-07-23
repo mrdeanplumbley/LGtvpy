@@ -1,12 +1,12 @@
 # LGtvpy
 
-Control your LG webOS TV (tested target: **OLED42C34LA**, webOS 25) from your PC over the local network — power, volume, inputs, apps, channels, remote buttons, text entry, notifications, and **every picture / sound / system setting** via the settings service.
+Control your LG webOS TV from your PC over the local network — power, volume, inputs, apps, channels, remote buttons, text entry, notifications, and **every picture / sound / system setting** via the settings service.
 
-Works with any recent LG webOS TV. Ships as a Python library (`lgtvpy`) **and** a command-line tool (`lgtv ...`). Your TV's IP (`192.168.1.61`) is baked in as the default, so most commands need no arguments.
+Works with any recent LG webOS TV (developed and tested against a C3 OLED on webOS 25). Ships as a Python library (`lgtvpy`) **and** a command-line tool (`lgtv ...`). After a one-time pairing, the tool remembers your TV, so everyday commands need no arguments.
 
 ## How it works
 
-LG webOS TVs expose a WebSocket control API ("SSAP") on the TV itself — no cloud, no LG account. This tool connects to `wss://192.168.1.61:3001`, pairs once (you accept a prompt on the TV), then sends JSON commands. Settings that the public API can't write (picture mode, OLED light, etc.) are changed through the TV's internal Luna settings service using a well-established bridge technique — the same one Home Assistant's community tooling uses.
+LG webOS TVs expose a WebSocket control API ("SSAP") on the TV itself — no cloud, no LG account. This tool connects to `wss://<tv-ip>:3001`, pairs once (you accept a prompt on the TV), then sends JSON commands. Settings that the public API can't write (picture mode, OLED light, etc.) are changed through the TV's internal Luna settings service using a well-established bridge technique — the same one Home Assistant's community tooling uses.
 
 ## Setup
 
@@ -18,20 +18,42 @@ pip install -e .
 
 This installs the one dependency (`websocket-client`) and gives you the `lgtv` command. Alternatively `pip install -r requirements.txt` and use `python -m lgtvpy` instead of `lgtv`.
 
-> **`lgtv` not recognized?** Your Python `Scripts` folder isn't on PATH (on this machine: `C:\Users\Dean\AppData\Local\Python\pythoncore-3.14-64\Scripts`). Either add it to PATH, or just use `python -m lgtvpy ...` — identical behaviour.
+> **`lgtv` not recognized?** Your Python `Scripts` folder isn't on PATH. Either add it (below), or just use `python -m lgtvpy ...` — identical behaviour.
+
+#### Adding Scripts to PATH - Windows Powershell
+```powershell
+$dir = py -c "import sysconfig; print(sysconfig.get_path('scripts','nt_user'))"
+$old = [Environment]::GetEnvironmentVariable('Path','User')
+if ($old -notlike "*$dir*") {
+    [Environment]::SetEnvironmentVariable('Path', ($old.TrimEnd(';') + ';' + $dir), 'User')
+}
+$env:Path += ";$dir"
+```
+
+#### Adding Scripts to PATH - Linux
+```bash
+dir="$(python3 -m site --user-base)/bin"
+case ":$PATH:" in
+  *":$dir:"*) ;;
+  *) echo "export PATH=\"\$PATH:$dir\"" >> ~/.bashrc ;;
+esac
+export PATH="$PATH:$dir"
+```
 
 ### First-time pairing
 
-1. Turn the TV on.
+1. Turn the TV on and find its IP address (*TV Settings → Network → Wi-Fi/Wired Connection → Advanced*, or your router's device list — giving the TV a static/reserved IP is recommended).
 2. Run:
 
 ```bash
-lgtv pair
+lgtv pair --ip 192.168.1.61        # use YOUR TV's IP
 ```
 
 3. A prompt appears on the TV — select **Accept** with the remote.
 
-That's it. The pairing key (and the TV's MAC address, needed for power-on) is saved to `~/.lgtv/config.json`. Every other command pairs automatically on first use too, `pair` just does it explicitly.
+That's it. The pairing key (and the TV's MAC address, needed for power-on) is saved to `~/.lgtv/config.json`, and from now on **`--ip` is optional**: with one TV paired, every command targets it automatically. Commands also pair automatically on first use, `pair` just does it explicitly.
+
+Got several TVs? Pair each one, then pass `--ip <address>` (or `LGTV("<address>")` in Python) to pick one.
 
 ### Powering the TV **on** works via Wake-on-LAN
 
@@ -42,8 +64,6 @@ The TV can't be reached over the network while in standby, so `lgtv on` sends a 
 Everything else (including `off`) uses the live connection.
 
 ## CLI usage
-
-All commands accept `--ip <address>` if you ever need a different TV. Default is `192.168.1.61`.
 
 ### Power
 
@@ -136,7 +156,7 @@ lgtv raw ssap://tv/switchInput '{"inputId": "HDMI_2"}'
 from lgtvpy import LGTV
 
 # Context manager connects (pairing on first ever use) and cleans up.
-with LGTV() as tv:                      # defaults to 192.168.1.61
+with LGTV() as tv:                      # your paired TV; or LGTV("192.168.1.61")
     tv.set_volume(15)
     tv.set_input("HDMI_2")
     tv.launch_app("netflix")
@@ -159,14 +179,14 @@ Full method reference: [docs/API.md](docs/API.md). Example scripts (movie-night 
 
 | Problem | Fix |
 |---|---|
-| `Could not connect to TV` | TV fully off (standby blocks the API) → `lgtv on` first, or check it's on the same network: `ping 192.168.1.61`. |
+| `Could not connect to TV` | TV fully off (standby blocks the API) → `lgtv on` first, or check it's on the same network: `ping <tv-ip>`. |
 | No pairing prompt appears | The TV must be on (not screensaver/standby). Re-run `lgtv pair`. Check *Settings → General → Devices → Mobile Connection Management* hasn't blocked new devices. |
 | `403` / pairing rejected errors after working before | The TV revoked the key (factory reset, or you denied a prompt). Delete `~/.lgtv/config.json` and pair again. |
 | `lgtv on` does nothing | Enable **Turn On via Wi-Fi** on the TV (see above). Wired ethernet is the most reliable for WoL. If the MAC wasn't auto-stored, run `lgtv sw-info` while the TV is on — `device_id` is the MAC — then `lgtv on --mac aa:bb:cc:dd:ee:ff`. |
 | A settings write silently does nothing | The key or value isn't valid for your firmware. Verify with `lgtv settings get <category> <key>` before/after. See [docs/SETTINGS.md](docs/SETTINGS.md). |
 | Firewall prompt on first run | Allow Python on **private** networks — outbound WebSocket + UDP broadcast (WoL) is all it uses. |
 | Occasional `Could not connect` / connection reset | The TV rate-limits rapid back-to-back connections. The client already retries 3×; just re-run the command if it still slips through. |
-| `lgtv info` shows firmware fields instead of model name | webOS 25 blocks the model-info endpoint for third-party clients; the tool falls back to software info automatically. |
+| `lgtv info` shows firmware fields instead of model name | Newer firmware (webOS 25) blocks the model-info endpoint for third-party clients; the tool falls back to software info automatically. |
 
 ## Notes
 
