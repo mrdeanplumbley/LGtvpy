@@ -33,9 +33,12 @@ class FakeTV:
 
     def __init__(self):
         self.client_key = "test-client-key"
-        self.reject_pairing = False
+        self.reject_pairing = False   # user declines the on-screen prompt
+        self.reject_signed = False    # webOS 26: signed manifest blacklisted
+        self.hello = {"deviceOSReleaseVersion": "10.2.0", "pairingTypes": ["PROMPT"]}
         self.routes = {}
         self.pushes = []
+        self.registrations = []  # manifests received, in order
         self.fail_urls = ()  # url fragments whose connect attempts get "reset"
         self.sockets = []    # every FakeWebSocket created
 
@@ -43,10 +46,26 @@ class FakeTV:
         msg = json.loads(raw)
         mtype = msg.get("type")
         out = []
+        if mtype == "hello":
+            if self.hello is None:
+                return []
+            return [{"type": "hello", "payload": self.hello}]  # no id, like the TV
         if mtype == "register":
-            if self.reject_pairing:
-                return [{"type": "error", "id": msg["id"], "error": "403 pairing denied"}]
+            manifest = msg["payload"]["manifest"]
+            self.registrations.append(manifest)
+            if self.reject_signed and "signatures" in manifest:
+                return [{
+                    "type": "error", "id": msg["id"],
+                    "error": "403 Pairing rejected: blacklisted certificate detected",
+                }]
             supplied = msg["payload"].get("client-key")
+            if self.reject_pairing:
+                # Declining happens on screen, i.e. after the prompt is shown.
+                return [
+                    {"type": "response", "id": msg["id"],
+                     "payload": {"pairingType": "PROMPT", "returnValue": True}},
+                    {"type": "error", "id": msg["id"], "error": "403 User denied access"},
+                ]
             if supplied != self.client_key:
                 # Unknown key -> TV shows the pairing prompt first.
                 out.append({
@@ -139,6 +158,9 @@ class StubClient:
         self.connected = True
         self.calls = []
         self.responses = responses or {}
+        self.signed_manifest = True
+        self.hello_info = {}
+        self.system_info = {}
 
     def request(self, uri, payload=None, timeout=None):
         self.calls.append((uri, payload))

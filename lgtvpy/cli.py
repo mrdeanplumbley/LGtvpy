@@ -131,6 +131,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("category")
     s.add_argument("key")
     s.add_argument("value")
+    s.add_argument(
+        "--public",
+        action="store_true",
+        help="write via the public settings API (webOS 24+): the TV reports "
+        "errors, but only some keys are accepted",
+    )
 
     p = add("profile", help="apply/show/save a TOML settings profile")
     profile_sub = p.add_subparsers(dest="profile_command", required=True)
@@ -189,15 +195,26 @@ def run(args: argparse.Namespace) -> Any:  # noqa: C901 - simple dispatch table
     with LGTV(args.ip, timeout=args.timeout, on_pair_prompt=_pair_prompt) as tv:
         if cmd == "pair":
             entry = _config.get_tv(tv.ip)
-            return (
+            mac = entry.get("mac") or "unknown"
+            message = (
                 f"Paired with {tv.ip}.\n"
                 f"Client key stored in {_config.DEFAULT_PATH}\n"
-                f"MAC address: {entry.get('mac', 'unknown')}"
+                f"MAC address: {', '.join(mac) if isinstance(mac, list) else mac}"
             )
+            if not tv.signed_pairing:
+                message += (
+                    "\nNote: this firmware rejected the full-permission pairing "
+                    "(webOS 26+), so some features may be refused - see README."
+                )
+            return message
         if cmd == "status":
             return tv.status()
         if cmd == "info":
-            return tv.system_info()
+            info = dict(tv.system_info())
+            version = tv.hello_info().get("deviceOSReleaseVersion")
+            if version:
+                info.setdefault("webOSVersion", version)
+            return info
         if cmd == "sw-info":
             return tv.software_info()
         if cmd == "off":
@@ -308,7 +325,11 @@ def run(args: argparse.Namespace) -> Any:  # noqa: C901 - simple dispatch table
         if cmd == "settings":
             if args.settings_command == "get":
                 return tv.get_settings(args.category, args.keys or None)
-            tv.set_settings(args.category, {args.key: _parse_value(args.value)})
+            setting = {args.key: _parse_value(args.value)}
+            if args.public:
+                tv.set_system_settings(args.category, setting)
+            else:
+                tv.set_settings(args.category, setting)
             return f"Set {args.category}.{args.key} = {args.value}"
 
         if cmd == "profile":

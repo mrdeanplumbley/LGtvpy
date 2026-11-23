@@ -171,6 +171,60 @@ def test_capture_reads_state_into_profile(tmp_path):
     assert profile["sound"] == {"soundMode": "movie"}
 
 
+def _capture_tv(tmp_path, picture_route):
+    from lgtvpy.tv import LGTV
+
+    tv = LGTV("192.0.2.1", config_path=tmp_path / "config.json")
+    tv._client = StubClient({
+        "ssap://settings/getSystemSettings": lambda payload: (
+            picture_route(payload) if payload["category"] == "picture"
+            else {"settings": {}}
+        ),
+    })
+    return tv
+
+
+def test_capture_requests_extended_picture_keys(tmp_path):
+    from lgtvpy.tv import PICTURE_KEYS_EXTENDED
+
+    requested = []
+
+    def route(payload):
+        requested.append(payload["keys"])
+        return {"settings": {
+            "pictureMode": "expert2",
+            "truMotionMode": "off",
+            "hdrDynamicToneMapping": "HGIG",
+            "blackLevel": {"ntsc": "low", "pal": "auto"},  # dict -> skipped
+        }}
+
+    profile = _capture_tv(tmp_path, route).capture_profile()
+    assert requested == [PICTURE_KEYS_EXTENDED]
+    assert profile["picture"] == {
+        "pictureMode": "expert2",
+        "truMotionMode": "off",
+        "hdrDynamicToneMapping": "HGIG",
+    }
+    profiles.validate(profile)  # a captured profile must load back
+
+
+def test_capture_falls_back_to_basic_keys_on_older_firmware(tmp_path):
+    from lgtvpy.client import RequestError
+    from lgtvpy.tv import PICTURE_KEYS, PICTURE_KEYS_EXTENDED
+
+    requested = []
+
+    def route(payload):
+        requested.append(payload["keys"])
+        if payload["keys"] == PICTURE_KEYS_EXTENDED:
+            raise RequestError("Some keys are not allowed")
+        return {"settings": {"backlight": "40"}}
+
+    profile = _capture_tv(tmp_path, route).capture_profile()
+    assert requested == [PICTURE_KEYS_EXTENDED, PICTURE_KEYS]
+    assert profile["picture"] == {"backlight": 40}
+
+
 def _settings_router(payload):
     category = payload["category"]
     if category == "picture":

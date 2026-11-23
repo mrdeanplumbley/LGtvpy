@@ -6,7 +6,7 @@ Works with any recent LG webOS TV (developed and tested against a C3 OLED on web
 
 ## How it works
 
-LG webOS TVs expose a WebSocket control API ("SSAP") on the TV itself — no cloud, no LG account. This tool connects to `wss://<tv-ip>:3001`, pairs once (you accept a prompt on the TV), then sends JSON commands. Settings that the public API can't write (picture mode, OLED light, etc.) are changed through the TV's internal Luna settings service using a well-established bridge technique — the same one Home Assistant's community tooling uses.
+LG webOS TVs expose a WebSocket control API ("SSAP") on the TV itself — no cloud, no LG account. This tool connects to `wss://<tv-ip>:3001`, pairs once (you accept a prompt on the TV), then sends JSON commands. Settings are written through the TV's internal Luna settings service using a well-established bridge technique, the same one Home Assistant's community tooling uses. It reaches every setting on every webOS version. On webOS 24+ many settings can also be written through the public API (`--public`), which reports errors.
 
 ## Setup
 
@@ -97,13 +97,15 @@ lgtv settings get picture contrast color           # specific keys
 lgtv settings set picture contrast 85
 lgtv settings set sound soundMode movie
 lgtv settings set picture pictureMode expert2
+lgtv settings set other enableALLM on              # Game / HDMI options live in "other"
+lgtv settings set picture pictureMode expert2 --public   # webOS 24+: TV reports errors
 ```
 
 See [docs/SETTINGS.md](docs/SETTINGS.md) for the full list of categories, keys and values.
 
 ### Profiles — save a whole look in a TOML file
 
-Rather than run a dozen `settings set` commands, describe a full TV state (picture, sound, input, volume…) in a `.toml` file and apply it in one go. Two ready-made presets ship in [profiles/](profiles/): **film** (accurate Filmmaker mode) and **game** (low-latency Game mode).
+Rather than run a dozen `settings set` commands, describe a full TV state (picture, sound, input, volume…) in a `.toml` file and apply it in one go. Three ready-made presets ship in [profiles/](profiles/): **film** (accurate Filmmaker mode), **game** (low-latency Game mode) and **pc-sdr** (accurate SDR desktop).
 
 ```bash
 lgtv profile apply profiles/film.toml     # best picture for movies
@@ -201,7 +203,20 @@ Full method reference: [docs/API.md](docs/API.md). Example scripts (movie-night 
 | A settings write silently does nothing | The key or value isn't valid for your firmware. Verify with `lgtv settings get <category> <key>` before/after. See [docs/SETTINGS.md](docs/SETTINGS.md). |
 | Firewall prompt on first run | Allow Python on **private** networks — outbound WebSocket + UDP broadcast (WoL) is all it uses. |
 | Occasional `Could not connect` / connection reset | The TV rate-limits rapid back-to-back connections. The client already retries 3×; just re-run the command if it still slips through. |
-| `lgtv info` shows firmware fields instead of model name | Newer firmware (webOS 25) blocks the model-info endpoint for third-party clients; the tool falls back to software info automatically. |
+| `403 Pairing rejected: blacklisted certificate detected` | webOS 26 firmware. Handled automatically: the tool retries with a reduced-permission pairing. See [webOS 26](#webos-26) below. |
+| A setting written with `--public` is rejected | That key isn't in the public API's allow-list (e.g. `soundMode`); drop `--public` to use the Luna bridge. See [docs/SETTINGS.md](docs/SETTINGS.md#public-api-coverage). |
+
+### webOS 26
+
+From mid-2026, LG's webOS 26 firmware (43.x) refuses the signed "LG Remote App" manifest that every open-source webOS client uses. Pairing fails with `403 Pairing rejected: blacklisted certificate detected`. LGtvpy then retries with an unsigned manifest, the same fallback Home Assistant uses. Pairing succeeds, and `lgtv pair` prints a note when this happened.
+
+The TV only grants the unsigned permission tier, so:
+
+- **Works:** power, volume, inputs, apps, channels, playback, remote buttons, text, notifications, reading settings.
+- **Refused:** software info (`lgtv sw-info`). The Wake-on-LAN MAC is found another way instead.
+- **May be refused, depending on model:** settings *writes*. Reports from 2026 OLEDs show `401 insufficient permissions`. On older TVs, the alert-based Luna bridge (the default `settings set`) is reported to keep working.
+
+If you rely on settings writes and your TV is on webOS 25, you can hold off the upgrade by turning automatic updates off (`lgtv settings set support automaticUpdate off`). Doing so also delays security fixes.
 
 ## Development & tests
 
@@ -213,7 +228,7 @@ pip install -e ".[test]"
 pytest
 ```
 
-The unit suite (~80 tests) runs fully offline — a scripted fake TV answers the SSAP protocol — so it works in CI. There's also an opt-in **live** suite of read-only checks against your real, already-paired TV (it must be on; nothing is changed):
+The unit suite (~130 tests) runs fully offline — a scripted fake TV answers the SSAP protocol — so it works in CI. There's also an opt-in **live** suite of read-only checks against your real, already-paired TV (it must be on; nothing is changed):
 
 ```bash
 LGTV_LIVE=1 pytest -m live          # bash
