@@ -27,7 +27,7 @@ applied through the settings service (see docs/SETTINGS.md for keys/values)::
 
 Application order: ``input`` -> each category table -> ``volume`` -> ``mute``
 -> ``sound_output`` -> ``notify``. Within a category that names a *mode*
-(``pictureMode`` / ``soundMode``) alongside other keys, the mode is applied
+(``pictureMode`` / ``soundMode`` / ``other.gameGenre``) alongside other keys, the mode is applied
 first in its own call - otherwise switching mode reloads that mode's stored
 values and clobbers the keys you set (verified on webOS 25). Per-app picture
 keys (``truMotionMode``) then go in a final write flagged ``current_app``
@@ -53,7 +53,9 @@ _META_KEYS = ("name", "description", "notify")
 _ALLOWED_SCALARS = frozenset(_ACTION_KEYS + _META_KEYS)
 
 # Category -> the "mode" key that must be applied before its siblings.
-_MODE_KEYS = {"picture": "pictureMode", "sound": "soundMode"}
+# gameGenre counts: each Game Optimizer genre stores its own gameSharpness /
+# gameColorDepth / ..., and switching genre reloads them (verified on webOS 25).
+_MODE_KEYS = {"picture": "pictureMode", "sound": "soundMode", "other": "gameGenre"}
 
 # Seconds to wait between the mode call and the rest of a category, so the
 # TV finishes applying the mode (its settings writes are asynchronous).

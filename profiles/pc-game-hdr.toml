@@ -1,0 +1,70 @@
+# PC gaming in HDR10 - HDR Game Optimizer on a Windows 11 PC (LG OLED42C3).
+# Apply with:  lgtv profile apply profiles/pc-game-hdr.toml
+#
+# Apply with HDR switched ON in Windows (Win+Alt+B) so the TV is showing an
+# HDR signal. "hdrGame" only exists then, and applying this over an SDR signal
+# would write these HDR values into the SDR game mode instead. The TV stores
+# SDR and HDR game settings separately: apply each profile once and it swaps
+# between them by itself whenever Windows toggles HDR. (Not yet confirmed for
+# the [other] game values. If the TV shares those between SDR and HDR, Game
+# Contrast - 100 here, 85 in the SDR profile - follows the last profile applied.)
+#
+# Then calibrate the PC to the TV, in this order:
+#   1. Windows HDR Calibration app (Microsoft Store), with this profile's HGiG
+#      active: minimum luminance 0, then raise both maximum-luminance sliders
+#      until the pattern just disappears - around 700-800 nits on a 42" C3.
+#   2. In each game: peak brightness = that number, paper white about 200 nits.
+#   3. GPU output: RGB, Full range, 10 bpc, with G-SYNC / VRR on.
+# Redo step 1 if you ever change hdrDynamicToneMapping below.
+#
+# Values follow RTINGS' C3 calibration and the AVS Forum LG OLED settings
+# guide (C2-C6).
+
+name = "PC game — HDR"
+description = "HDR Game Optimizer for a Windows PC: HGiG, full brightness range, D65, no processing."
+
+input = "HDMI_2"             # the PC's port; picture settings are stored per input
+
+[picture]
+pictureMode = "hdrGame"      # HDR Game Optimizer - lowest input lag
+backlight = 100              # OLED Pixel Brightness: HDR needs the full range
+                             # Contrast, black level, colour and sharpness are in [other]:
+                             # Game Optimizer ignores the picture versions of those four.
+tint = 0
+colorTemperature = -50       # Warm 50 = D65 (6500K). Looks reddish at first;
+                             # -25 (Warm 25) is the usual cooler compromise.
+colorGamut = "auto"          # Auto Detect: follows the BT.2020 signal. "native" oversaturates.
+hdrDynamicToneMapping = "HGIG"   # TV tracks the signal exactly and clips at its real peak, so
+                                 # Windows and the game do the tone mapping (step 1 above).
+                                 # "on" is brighter but inaccurate - a bright-room alternative.
+                                 # "off" suits games with no HDR sliders of their own.
+peakBrightness = "high"      # full HDR highlights
+dynamicContrast = "off"
+energySaving = "off"         # otherwise the TV dims the panel on its own
+motionEyeCare = "off"
+eyeComfortMode = "off"       # Reduce Blue Light - shifts the white point
+noiseReduction = "off"
+mpegNoiseReduction = "off"
+smoothGradation = "off"
+superResolution = "off"
+
+[aiPicture]
+ai_Picture = "off"
+ai_Brightness = "off"        # stops the light sensor changing brightness mid-game
+ai_Genre = "off"
+
+[other]
+gameGenre = "User"       # each genre stores its own values below, so this is applied first
+gameAdjustContrast = 100     # Game Contrast
+gameBlackLevel = 50          # Game Black Level: reference
+gameColorDepth = 55          # Game Colour Depth: the accurate value in Game Optimizer
+gameSharpness = 0            # Adjust Game Sharpness: none at native 4K; 10 if you render below 2160p
+blackStabilizer = 10        # 10 = neutral. Higher lifts shadows (visibility over accuracy).
+whiteStabilizer = 10         # 10 = neutral
+gameOptimization = "on"      # VRR & G-Sync (LG's key name is misleading)
+inputOptimization = "on"     # Prevent Input Delay: "on" = Boost, "auto" = Standard
+lowLevelAdjustment = 0       # Fine Tune Dark Areas, -30..30. Negative darkens near-black, positive
+                             # lifts it: try a small negative step (-3) if VRR lifts or flickers near-black.
+
+[sound]
+soundMode = "game"

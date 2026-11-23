@@ -105,7 +105,7 @@ See [docs/SETTINGS.md](docs/SETTINGS.md) for the full list of categories, keys a
 
 ### Profiles — save a whole look in a TOML file
 
-Rather than run a dozen `settings set` commands, describe a full TV state (picture, sound, input, volume…) in a `.toml` file and apply it in one go. Three ready-made presets ship in [profiles/](profiles/): **film** (accurate Filmmaker mode), **game** (low-latency Game mode) and **pc-sdr** (accurate SDR desktop).
+Rather than run a dozen `settings set` commands, describe a full TV state (picture, sound, input, volume…) in a `.toml` file and apply it in one go. Five ready-made presets ship in [profiles/](profiles/): **film** (accurate Filmmaker mode), **game** (low-latency Game mode), **pc-sdr** (accurate SDR desktop), and **pc-game-sdr** / **pc-game-hdr** (Game Optimizer for a Windows PC — apply each with Windows HDR off / on respectively).
 
 ```bash
 lgtv profile apply profiles/film.toml     # best picture for movies

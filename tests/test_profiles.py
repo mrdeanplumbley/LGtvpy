@@ -121,6 +121,24 @@ def test_apply_picture_mode_applied_before_other_keys(stub_tv):
     assert settings_calls[1] == {"backlight": 100, "contrast": 90}  # then the rest
 
 
+def test_apply_game_genre_applied_before_game_values(stub_tv):
+    # Switching genre reloads that genre's stored game* values, so it goes first.
+    stub = stub_tv._client
+    stub.responses["ssap://system.notifications/createAlert"] = {
+        "returnValue": True,
+        "alertId": "a",
+    }
+    profile = {"other": {"gameSharpness": 0, "gameGenre": "Standard", "gameColorDepth": 55}}
+    profiles.apply(stub_tv, profile, settle=0)
+    settings_calls = [
+        payload["buttons"][0]["params"]["settings"]
+        for uri, payload in stub.calls
+        if uri == "ssap://system.notifications/createAlert"
+    ]
+    assert settings_calls[0] == {"gameGenre": "Standard"}
+    assert settings_calls[1] == {"gameSharpness": 0, "gameColorDepth": 55}
+
+
 def test_apply_single_key_category_is_one_call(stub_tv):
     stub = stub_tv._client
     stub.responses["ssap://system.notifications/createAlert"] = {

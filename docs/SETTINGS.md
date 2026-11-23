@@ -27,6 +27,8 @@ Either way, check with `settings get` before and after a write if a key is reada
 
 **Picture settings belong to the active picture mode** (per input and per SDR/HDR/Dolby Vision), just like changing them in the TV menu. Switching `pictureMode` reloads that mode's stored values. Profiles therefore apply the mode first, then the rest.
 
+**Game Optimizer has its own contrast, black level, colour and sharpness.** In `game` / `hdrGame`, the picture keys `contrast`, `brightness`, `color` and `sharpness` are greyed out in the TV menu and don't affect the image. Use `gameAdjustContrast`, `gameBlackLevel`, `gameColorDepth` and `gameSharpness` in [`other`](#category-other-gaming-hdmi-panel-care) instead. Other picture keys, such as `backlight`, `colorTemperature`, `tint`, `colorGamut` and `hdrDynamicToneMapping`, still apply.
+
 **`truMotionMode` and `aspectRatio` are stored per app.** The TV ignores them unless the write carries a `current_app` flag. `set_settings`/`set_system_settings` (and profiles) add the flag automatically, sending those keys in their own write.
 
 ## Category: `picture`
@@ -42,7 +44,7 @@ Either way, check with `settings get` before and after a write if a key is reada
 | `color` | `0`–`100` | Saturation. |
 | `sharpness` | `0`–`50` | |
 | `tint` | `-50`–`50` | |
-| `colorTemperature` | `-50`–`50` | Warm ↔ cool. bscpylgtv's calibrated presets write `50` (they target Warm 50), which suggests positive = warm. Confirm on your set: pick Warm 50 in the menu, then `settings get picture colorTemperature`. |
+| `colorTemperature` | `-50`–`50` | **Negative = warm.** `-50` shows as Warm 50 (≈ D65), `50` as Cold 50 (checked against the menu on a C3 running webOS 25). bscpylgtv's presets write `50` for Warm 50, so older models may differ: check `settings get picture colorTemperature` against the menu. |
 | `energySaving` | `off`, `auto`, `min`, `med`, `max` | On 2022+ models Energy Saving overrides/locks the backlight, so set it to `off` if backlight changes don't take. On EU/UK models the first change may pop up a confirmation. |
 | `gamma` | `low`, `medium`, `high1`, `high2` (+ `mediumHavingLevel` **2025+**) | `medium` ≈ 2.2, `high1` ≈ 2.4 (as used by bscpylgtv's presets). |
 | `gammaLevel` | `-3`–`3` | **2025+**, used with `mediumHavingLevel`. |
@@ -107,8 +109,13 @@ lgtv settings set picture truMotionMode off        # current_app flag added for 
 | Key | Values | Notes |
 |---|---|---|
 | `enableALLM` | `on`, `off` | Auto Low Latency Mode. |
-| `gameOptimization`, `gameOptimizationHDMI1`…`4` | `on`, `off` | Game Optimizer, globally / per input. |
-| `gameGenre` | `Standard`, `FPS`, `RPG`, `RTS`, `Sports`, `USER` | Game Optimizer genre preset. |
+| `gameOptimization` | `on`, `off` | **VRR & G-Sync**, despite the name. `off` stops the TV advertising VRR (its EDID VRR range drops to 0), so the source re-handshakes and the screen blanks for a moment. Writing the value it already has doesn't. |
+| `gameOptimizationHDMI1`…`4` | `on`, `off` | Per-input variants. Effect not confirmed. |
+| `inputOptimization` | `auto`, `on` | Prevent Input Delay: `auto` = Standard, `on` = Boost. Some tools send `standard`/`boost`, which a C3 silently ignores. |
+| `lowLevelAdjustment` | `-30`–`30` | Fine Tune Dark Areas: negative darkens near-black, positive lifts it. Counters VRR's raised blacks. |
+| `gameGenre` | `Standard`, `FPS`, `RPG`, `RTS`, `Sports`, `USER` | Game Optimizer genre preset. Each genre stores its own `game*` picture values below, and switching genre reloads them, so profiles apply it first. |
+| `gameAdjustContrast` / `gameBlackLevel` / `gameColorDepth` | `0`–`100` | Game Contrast / Game Black Level / Game Colour Depth. In Game Optimizer they replace `picture` `contrast` / `brightness` / `color`. |
+| `gameSharpness` | `0`–`50` | Adjust Game Sharpness. In Game Optimizer it replaces `picture.sharpness`. |
 | `blackStabilizer` / `whiteStabilizer` | `0`–`20` | Game Optimizer. |
 | `blueLight` | `off`, `level1`, `level2` | Blue-light reduction level. |
 | `darkMode` | `off`, `level1`, `level2` | Dark mode level. |
@@ -122,6 +129,8 @@ lgtv settings set picture truMotionMode off        # current_app flag added for 
 | `simplinkEnable` | `on`, `off` | HDMI-CEC (SIMPLINK). |
 | `oledCareMode` | `off`, `comfortCare`, `cinemaCare`, `kidsCare` | |
 | `lgLogoDisplay` | `on`, `off` | LG logo at power-on. |
+
+`gameOptimization`, `inputOptimization`, `lowLevelAdjustment`, `gameGenre` and the four `game*` picture keys were verified on a C3 running webOS 25. On that firmware, VRR & G-Sync and Fine Tune Dark Areas no longer appear in the menus at all, so these keys are the only way to change them.
 
 **2026+** adds Game Dashboard extras such as `fpsCounter` (`off`, `topLeft`, `topRight`, `bottomLeft`, `bottomRight`) and `crosshair` (`off`, `redCross`, `greenCross`, `redDot`, `greenDot`).
 
@@ -181,6 +190,12 @@ If a key comes back, that exact spelling is what `settings set` needs. For deep 
 
 ```bash
 lgtv raw ssap://settings/getSystemSettings '{"category": "picture", "keys": ["backlight"]}'
+```
+
+To check a write-only key, look at the TV's own menu. `ssap://tv/executeOneShot` with `"method": "DISPLAY"` returns an `imageUri` (self-signed HTTPS on the TV) pointing to a screenshot. It includes the on-screen menus and most of the TV's picture processing (black level, colour, sharpness), but not white balance. Open the menu first, e.g. `lgtv launch com.webos.app.gameoptimizer` for the Game Optimizer overlay:
+
+```bash
+lgtv raw ssap://tv/executeOneShot '{"method": "DISPLAY", "format": "JPG", "width": 1280, "height": 720}'
 ```
 
 The per-model dumps linked at the top list every key, including ones not covered here (`caption`, `lock`, `channel`, `twinTv`, …).

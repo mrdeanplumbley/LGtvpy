@@ -1,0 +1,61 @@
+# PC gaming in SDR - Game Optimizer on a Windows 11 PC (LG OLED42C3).
+# Apply with:  lgtv profile apply profiles/pc-game-sdr.toml
+#
+# Apply with HDR switched OFF in Windows (Win+Alt+B). Picture settings belong
+# to whichever mode the TV is in right now, so applying this during an HDR
+# signal would write these SDR values into the HDR game mode instead. The TV
+# stores SDR and HDR game settings separately: apply each profile once and it
+# swaps between them by itself whenever Windows toggles HDR. (Not yet confirmed
+# for the [other] game values. If the TV shares those between SDR and HDR, Game
+# Contrast - 85 here, 100 in the HDR profile - follows the last profile applied.)
+#
+# Values follow RTINGS' C3 calibration and the AVS Forum LG OLED settings
+# guide (C2-C6): D65 white, gamma 2.2, sRGB-clamped colour, and everything
+# that reshapes the image switched off.
+
+name = "PC game — SDR"
+description = "Game Optimizer for a Windows PC in SDR: accurate D65 / gamma 2.2, no processing."
+
+input = "HDMI_2"             # the PC's port; picture settings are stored per input
+
+[picture]
+pictureMode = "game"         # Game Optimizer - lowest input lag
+backlight = 90               # OLED Pixel Brightness. Taste and room only, accuracy is unaffected.
+                             # Roughly 42 = 100 nits, 54 = 120, 100 = 200 (the mode's SDR ceiling).
+                             # Contrast, black level, colour and sharpness are in [other]:
+                             # Game Optimizer ignores the picture versions of those four.
+tint = 0
+colorTemperature = -50      # Warm 50 = D65 (6500K). Looks reddish at first;
+                             # -25 (Warm 25) is the usual cooler compromise.
+gamma = "medium"             # 2.2 - what SDR games are mastered for
+colorGamut = "auto"          # Auto Detect: clamps SDR to sRGB/Rec.709. "native" oversaturates.
+peakBrightness = "off"       # steady brightness (the TV locks this off on a PC-icon input anyway)
+dynamicContrast = "off"
+energySaving = "off"         # otherwise the TV dims the panel on its own
+motionEyeCare = "off"
+eyeComfortMode = "off"       # Reduce Blue Light - shifts the white point
+noiseReduction = "off"
+mpegNoiseReduction = "off"
+smoothGradation = "off"
+superResolution = "off"
+
+[aiPicture]
+ai_Picture = "off"
+ai_Brightness = "off"        # stops the light sensor changing brightness mid-game
+ai_Genre = "off"
+
+[other]
+gameGenre = "Standard"       # each genre stores its own values below, so this is applied first
+gameAdjustContrast = 85      # Game Contrast
+gameBlackLevel = 50          # Game Black Level: reference
+gameColorDepth = 55          # Game Colour Depth: the accurate value in Game Optimizer
+gameSharpness = 0            # Adjust Game Sharpness: none at native 4K; 10 if you render below 2160p
+blackStabilizer = 10        # 10 = neutral. Higher lifts shadows (visibility over accuracy).
+whiteStabilizer = 10         # 10 = neutral
+gameOptimization = "on"      # VRR & G-Sync (LG's key name is misleading)
+inputOptimization = "on"     # Prevent Input Delay: "on" = Boost, "auto" = Standard
+lowLevelAdjustment = 0       # Fine Tune Dark Areas, -30..30. Negative darkens near-black, positive
+                             # lifts it: try a small negative step (-3) if VRR lifts or flickers near-black.
+
+[sound]
+soundMode = "game"
