@@ -54,7 +54,7 @@ ai_Brightness = "off"        # stops the light sensor changing brightness mid-ga
 ai_Genre = "off"
 
 [other]
-gameGenre = "User"       # each genre stores its own values below, so this is applied first
+gameGenre = "Standard"       # each genre stores its own values below, so this is applied first
 gameAdjustContrast = 100     # Game Contrast
 gameBlackLevel = 50          # Game Black Level: reference
 gameColorDepth = 55          # Game Colour Depth: the accurate value in Game Optimizer
