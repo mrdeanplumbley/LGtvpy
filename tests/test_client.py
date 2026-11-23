@@ -83,6 +83,158 @@ def test_register_zero_timeout_raises_pairing_error(fake_tv):
         client.register(timeout=0)
 
 
+def test_register_prompt_never_answered_is_pairing_timeout(fake_tv):
+    import json
+
+    original_receive = fake_tv.receive
+
+    def receive(raw):
+        msg = json.loads(raw)
+        if msg.get("type") == "register":  # prompt shown, user never answers
+            return [{"type": "response", "id": msg["id"],
+                     "payload": {"pairingType": "PROMPT"}}]
+        return original_receive(raw)
+
+    fake_tv.receive = receive
+    client = make_client(fake_tv)
+    with pytest.raises(PairingError, match="Timed out"):
+        client.register()
+    assert len(fake_tv.sockets) == 1  # no unsigned retry / reconnect
+
+
+# -- pre-registration handshake ---------------------------------------------
+
+
+def test_register_does_hello_and_system_info_first(fake_tv):
+    fake_tv.routes["ssap://system/getSystemInfo"] = {
+        "returnValue": True,
+        "modelName": "OLED42C34LA",
+    }
+    client = make_client(fake_tv)
+    client.register("test-client-key")
+    assert client.hello_info["deviceOSReleaseVersion"] == "10.2.0"
+    assert client.system_info["modelName"] == "OLED42C34LA"
+
+    import json
+    sent = [json.loads(raw) for raw in fake_tv.sockets[0].sent]
+    assert [m["type"] for m in sent] == ["hello", "request", "register"]
+    assert sent[1]["uri"] == "ssap://system/getSystemInfo"
+
+
+def test_handshake_is_best_effort(fake_tv):
+    fake_tv.hello = None  # TV ignores hello
+    fake_tv.routes["ssap://system/getSystemInfo"] = {
+        "returnValue": False,
+        "errorText": "401 insufficient permissions (not registered)",
+    }
+    client = make_client(fake_tv)
+    assert client.register("test-client-key") == "test-client-key"
+    assert client.hello_info == {}
+    assert client.system_info == {}
+
+
+# -- webOS 26: blacklisted signing certificate -------------------------------
+
+
+def test_signed_manifest_is_used_when_accepted(fake_tv):
+    client = make_client(fake_tv)
+    client.register()
+    assert client.signed_manifest
+    assert len(fake_tv.registrations) == 1
+    assert "signatures" in fake_tv.registrations[0]
+
+
+def test_rejected_signature_retries_unsigned_on_same_socket(fake_tv):
+    fake_tv.reject_signed = True
+    client = make_client(fake_tv)
+    prompts = []
+    key = client.register(on_prompt=lambda: prompts.append(1))
+
+    assert key == "test-client-key"
+    assert client.signed_manifest is False
+    assert prompts == [1]  # only the unsigned attempt prompts
+    assert len(fake_tv.sockets) == 1
+    signed, unsigned = fake_tv.registrations
+    assert "signatures" in signed
+    assert set(unsigned) == {"manifestVersion", "appVersion", "permissions"}
+    # The signed tier's permissions are still requested, just unsigned.
+    assert "WRITE_SETTINGS" in unsigned["permissions"]
+    assert "CONTROL_MOUSE_AND_KEYBOARD" in unsigned["permissions"]
+    assert unsigned["permissions"] == sorted(set(unsigned["permissions"]))
+
+
+def test_rejected_signature_with_stored_key_keeps_key(fake_tv):
+    fake_tv.reject_signed = True
+    client = make_client(fake_tv)
+    prompts = []
+    key = client.register("test-client-key", on_prompt=lambda: prompts.append(1))
+    assert key == "test-client-key"
+    assert prompts == []
+    assert client.signed_manifest is False
+
+
+def test_declined_prompt_is_not_retried_unsigned(fake_tv):
+    fake_tv.reject_pairing = True
+    client = make_client(fake_tv)
+    prompts = []
+    with pytest.raises(PairingError, match="denied"):
+        client.register(on_prompt=lambda: prompts.append(1))
+    assert prompts == [1]  # the user is not asked a second time
+    assert len(fake_tv.registrations) == 1
+
+
+def test_unsigned_also_rejected_raises_and_stays_signed(fake_tv):
+    import json
+
+    original_receive = fake_tv.receive
+
+    def receive(raw):
+        msg = json.loads(raw)
+        if msg.get("type") == "register":
+            fake_tv.registrations.append(msg["payload"]["manifest"])
+            return [{"type": "error", "id": msg["id"], "error": "500 booting"}]
+        return original_receive(raw)
+
+    fake_tv.receive = receive
+    client = make_client(fake_tv)
+    with pytest.raises(PairingError, match="booting"):
+        client.register("test-client-key")
+    assert len(fake_tv.registrations) == 2
+    assert client.signed_manifest  # a failed fallback isn't remembered
+
+
+def test_reconnects_if_tv_hangs_up_after_rejecting_signature(fake_tv):
+    fake_tv.reject_signed = True
+    client = make_client(fake_tv)
+    first_ws = fake_tv.sockets[0]
+    original_recv = first_ws.recv
+
+    def recv_then_hang_up():
+        frame = original_recv()
+        if "blacklisted" in frame:
+            first_ws.connected = False
+        return frame
+
+    first_ws.recv = recv_then_hang_up
+    assert client.register() == "test-client-key"
+    assert client.signed_manifest is False
+    assert len(fake_tv.sockets) == 2
+    assert "signatures" not in fake_tv.registrations[-1]
+
+
+def test_send_on_dropped_socket_raises_lgtv_error(fake_tv):
+    client = make_client(fake_tv)
+    ws = fake_tv.sockets[0]
+
+    def broken_send(raw):
+        raise ConnectionResetError("reset by peer")
+
+    ws.send = broken_send
+    with pytest.raises(LGTVError, match="Connection to TV lost"):
+        client.request("ssap://audio/getVolume")
+    assert not client.connected
+
+
 # -- requests ---------------------------------------------------------------
 
 

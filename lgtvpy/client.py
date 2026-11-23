@@ -22,6 +22,7 @@ PLAIN_PORT = 3000  # ws  - legacy, often disabled on new TVs
 PAIR_TIMEOUT = 60.0  # how long to wait for the user to press "Accept" on the TV
 REQUEST_TIMEOUT = 10.0
 CONNECT_TIMEOUT = 5.0
+HANDSHAKE_TIMEOUT = 5.0  # pre-registration hello / system-info exchange
 
 # Self-signed cert on the TV -> disable verification for the local connection.
 _SSLOPT = {"cert_reqs": ssl.CERT_NONE, "check_hostname": False}
@@ -43,6 +44,10 @@ class RequestTimeout(LGTVError):
     """No answer from the TV within the timeout."""
 
 
+class _ImmediateRejection(PairingError):
+    """The TV refused ``register`` outright, before showing any prompt."""
+
+
 # ---------------------------------------------------------------------------
 # Registration manifest
 #
@@ -50,6 +55,14 @@ class RequestTimeout(LGTVError):
 # webOS remote implementation. The signed blob + signature grant the client
 # the full permission set (including WRITE_SETTINGS / WRITE_NOTIFICATION_ALERT,
 # which are needed to change picture & system settings).
+#
+# webOS 26 firmware (43.x, mid-2026 onwards) blacklists this signing
+# certificate and answers "403 Pairing rejected: blacklisted certificate
+# detected". register() then retries with _UNSIGNED_MANIFEST (signature and
+# signed block stripped, permissions merged) - the same fallback Home
+# Assistant's aiowebostv uses. Pairing succeeds, but the TV only grants the
+# unsigned permission tier: getCurrentSWInformation is refused, and on some
+# models so are settings writes.
 # ---------------------------------------------------------------------------
 _SIGNATURE = (
     "eyJhbGdvcml0aG0iOiJSU0EtU0hBMjU2Iiwia2V5SWQiOiJ0ZXN0LXNpZ25pbmctY2VydCIsInNpZ25hdHVyZVZlcnNpb24iOjF9."
@@ -150,6 +163,14 @@ _MANIFEST = {
     "signatures": [{"signatureVersion": 1, "signature": _SIGNATURE}],
 }
 
+_UNSIGNED_MANIFEST = {
+    "manifestVersion": _MANIFEST["manifestVersion"],
+    "appVersion": _MANIFEST["appVersion"],
+    "permissions": sorted(
+        set(_MANIFEST["permissions"]) | set(_MANIFEST["signed"]["permissions"])
+    ),
+}
+
 
 class WebOSClient:
     """Synchronous SSAP client for a single LG webOS TV."""
@@ -163,6 +184,11 @@ class WebOSClient:
         # Messages received while waiting for a different request id
         # (e.g. subscription pushes). Bounded so it can never grow unbounded.
         self._backlog: deque = deque(maxlen=100)
+        # Filled by the pre-registration handshake (see register()).
+        self.hello_info: dict = {}
+        self.system_info: dict = {}
+        # False once the TV has forced a reduced-permission (unsigned) pairing.
+        self.signed_manifest = True
 
     # -- connection ---------------------------------------------------------
 
@@ -222,36 +248,107 @@ class WebOSClient:
         Without a ``client_key`` the TV shows an on-screen prompt that must be
         accepted with the remote; ``on_prompt`` is called when that happens.
         Returns the client key to store for future connections.
+
+        Registers with the signed (full-permission) manifest first. If the TV
+        refuses it outright - webOS 26 blacklists its certificate - pairing is
+        retried with the unsigned manifest and :attr:`signed_manifest` becomes
+        False.
         """
+        self.handshake()
+        try:
+            key = self._register(client_key, timeout, on_prompt, _MANIFEST)
+        except _ImmediateRejection:
+            pass
+        else:
+            self.signed_manifest = True
+            return key
+
+        try:
+            key = self._register(client_key, timeout, on_prompt, _UNSIGNED_MANIFEST)
+        except PairingError:
+            raise
+        except LGTVError:
+            # The TV hung up after rejecting the signature: use a fresh socket.
+            self.close()
+            self.connect()
+            self.handshake()
+            key = self._register(client_key, timeout, on_prompt, _UNSIGNED_MANIFEST)
+        self.signed_manifest = False
+        return key
+
+    def handshake(self) -> None:
+        """Pre-registration exchange: ``hello``, then ``getSystemInfo``.
+
+        Newer firmware (webOS 25+) only answers ``getSystemInfo`` *before*
+        registration, so the result is cached in :attr:`system_info`.
+        ``hello`` reports the webOS version and supported pairing types
+        (:attr:`hello_info`). Both are best effort - older firmware may
+        refuse either, which is harmless.
+        """
+        try:
+            self._send({"id": self._new_id(), "type": "hello", "payload": {}})
+            msg = self._recv(timeout=HANDSHAKE_TIMEOUT)
+            if msg.get("type") == "hello":
+                self.hello_info = msg.get("payload", {})
+            else:
+                self._backlog.append(msg)
+        except RequestTimeout:
+            pass
+        try:
+            self.system_info = self.request(
+                "ssap://system/getSystemInfo", timeout=HANDSHAKE_TIMEOUT
+            )
+        except (RequestError, RequestTimeout):
+            pass
+
+    def _register(
+        self,
+        client_key: Optional[str],
+        timeout: float,
+        on_prompt: Optional[Callable[[], None]],
+        manifest: dict,
+    ) -> str:
         payload: dict = {
             "forcePairing": False,
             "pairingType": "PROMPT",
-            "manifest": _MANIFEST,
+            "manifest": manifest,
         }
         if client_key:
             payload["client-key"] = client_key
 
         self._send({"id": self._new_id(), "type": "register", "payload": payload})
 
+        timed_out = PairingError(
+            "Timed out waiting for pairing. Accept the prompt on the TV "
+            "and try again."
+        )
         deadline = time.monotonic() + timeout
+        answered = False
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise PairingError(
-                    "Timed out waiting for pairing. Accept the prompt on the TV "
-                    "and try again."
-                )
-            msg = self._recv(timeout=remaining)
+                raise timed_out
+            try:
+                msg = self._recv(timeout=remaining)
+            except RequestTimeout:
+                raise timed_out from None
             msg_type = msg.get("type")
             if msg_type == "registered":
-                return msg["payload"]["client-key"]
+                key = msg.get("payload", {}).get("client-key") or client_key
+                if not key:
+                    raise PairingError("TV completed pairing but sent no client key")
+                return key
             if msg_type == "response":
                 # TV acknowledged and is now showing the pairing prompt.
+                answered = True
                 if msg.get("payload", {}).get("pairingType") == "PROMPT" and on_prompt:
                     on_prompt()
                 continue
             if msg_type == "error":
-                raise PairingError(f"TV rejected pairing: {msg.get('error')}")
+                # An error *after* the prompt means the user declined or it
+                # timed out - never retry that, it would prompt them again.
+                error_cls = PairingError if answered else _ImmediateRejection
+                raise error_cls(f"TV rejected pairing: {msg.get('error')}")
 
     # -- requests -----------------------------------------------------------
 
@@ -315,7 +412,11 @@ class WebOSClient:
         if not self.connected:
             raise LGTVError("Not connected - call connect() first")
         assert self._ws is not None
-        self._ws.send(json.dumps(obj))
+        try:
+            self._ws.send(json.dumps(obj))
+        except (websocket.WebSocketConnectionClosedException, OSError) as exc:
+            self.close()
+            raise LGTVError(f"Connection to TV lost: {exc}") from exc
 
     def _recv(self, timeout: float) -> dict:
         assert self._ws is not None

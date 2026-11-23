@@ -73,6 +73,10 @@ class FakeLGTV:
     # settings / info / raw
     def get_settings(self, category, keys=None): return {"backlight": 50}
     def set_settings(self, category, settings): self._rec("set_settings", category, settings)
+    def set_system_settings(self, category, settings):
+        self._rec("set_system_settings", category, settings); return {}
+    signed_pairing = True
+    def hello_info(self): return {"deviceOSReleaseVersion": "10.2.0"}
     def set_picture_mode(self, mode): self._rec("set_picture_mode", mode)
     def set_sound_mode(self, mode): self._rec("set_sound_mode", mode)
     def set_backlight(self, level): self._rec("set_backlight", level)
@@ -198,8 +202,26 @@ def test_settings_set_parses_value_types(fake_cli):
     assert ("set_settings", "sound", {"soundMode": "movie"}) in calls()
 
 
+def test_settings_set_public_uses_public_api(fake_cli):
+    run_cli(["settings", "set", "picture", "pictureMode", "expert2", "--public"])
+    assert ("set_system_settings", "picture", {"pictureMode": "expert2"}) in calls()
+    assert not any(c[0] == "set_settings" for c in calls())
+
+
 def test_settings_get(fake_cli):
     assert run_cli(["settings", "get", "picture"]) == {"backlight": 50}
+
+
+def test_info_adds_webos_version(fake_cli):
+    assert run_cli(["info"]) == {"modelName": "TEST", "webOSVersion": "10.2.0"}
+
+
+def test_pair_mentions_reduced_permissions(fake_cli, monkeypatch, tmp_path):
+    monkeypatch.setattr(cli._config, "get_tv", lambda ip: {"mac": ["aa", "bb"]})
+    assert "aa, bb" in run_cli(["pair"])
+    assert "reduced" not in run_cli(["pair"]).lower()
+    monkeypatch.setattr(FakeLGTV, "signed_pairing", False)
+    assert "full-permission pairing" in run_cli(["pair"])
 
 
 def test_shortcut_settings_commands(fake_cli):

@@ -23,6 +23,8 @@ With no `ip`, the paired TV from `~/.lgtv/config.json` is used (works when exact
 
 First-ever connection triggers the on-screen pairing prompt; the returned key is stored in `~/.lgtv/config.json` and reused automatically, together with the TV's MAC address for Wake-on-LAN.
 
+Each connection first does the TV's pre-registration handshake (`hello`, then `getSystemInfo`, which webOS 25+ only answers before registration), then registers with LG's signed full-permission manifest. If the TV rejects that signature outright, it retries with an unsigned manifest. webOS 26 firmware does this ("403 Pairing rejected: blacklisted certificate detected"). Pairing then succeeds with reduced permissions, and `tv.signed_pairing` is `False`. A refused call raises `RequestError` with a note explaining why.
+
 Errors raise `lgtvpy.LGTVError` (subclasses: `PairingError`, `RequestError`, `RequestTimeout`).
 
 ## Power
@@ -30,7 +32,7 @@ Errors raise `lgtvpy.LGTVError` (subclasses: `PairingError`, `RequestError`, `Re
 | Method | Description |
 |---|---|
 | `tv.power_off()` | Standby. |
-| `tv.power_on(mac=None)` | Wake-on-LAN. Works while the TV is off; needs no connection. MAC auto-stored at pairing time. |
+| `tv.power_on(mac=None)` | Wake-on-LAN. Works while the TV is off; needs no connection. MAC auto-stored at pairing time. If only the wired + Wi-Fi pair could be discovered (webOS 26), both are stored and woken. |
 | `tv.screen_off()` / `tv.screen_on()` | Panel off/on while apps and audio keep running. |
 | `tv.power_state()` | `{'state': 'Active' | 'Screen Off' | ...}` |
 
@@ -92,13 +94,14 @@ Common app ids: `netflix`, `youtube.leanback.v4`, `amazon`, `com.disney.disneypl
 
 | Method | Description |
 |---|---|
-| `tv.get_settings(category, keys=None)` | Read, e.g. `tv.get_settings("picture", ["backlight"])`. |
-| `tv.set_settings(category, {key: value})` | Write any system setting (via the Luna bridge). |
+| `tv.get_settings(category, keys=None)` | Read, e.g. `tv.get_settings("picture", ["backlight"])`. Only allow-listed keys are readable. |
+| `tv.set_settings(category, {key: value}, current_app=None)` | Write any system setting (via the Luna bridge). Silent: the TV doesn't report bad keys/values. `truMotionMode`/`aspectRatio` are sent in their own write flagged `current_app` (the TV ignores them otherwise). Pass `current_app` to force the flag for the whole write. |
+| `tv.set_system_settings(category, {key: value}, current_app=None)` | Write through the public settings API (webOS 24+). Raises `RequestError` on a rejected key/value, but only accepts a subset of keys. |
 | `tv.get_picture_settings()` / `tv.set_picture_settings({...})` | Category `picture` shortcuts. |
-| `tv.set_picture_mode("filmMaker")` | |
+| `tv.set_picture_mode("filmMaker")` | HDR/Dolby Vision content uses its own mode names (`hdrFilmMaker`, `dolbyHdrCinema`, …). |
 | `tv.set_backlight(40)` | OLED light 0–100. |
-| `tv.set_energy_saving("off")` | On 2022+ firmware energy saving can lock the backlight — turn it off first. |
-| `tv.set_sound_mode("movie")` | |
+| `tv.set_energy_saving("off")` | `off`, `auto`, `min`, `med`, `max`. On 2022+ firmware energy saving can lock the backlight, so turn it off first. |
+| `tv.set_sound_mode("movie")` | `aiSoundPlus`, `standard`, `movie`, `news`, `sports`, `music`, `game`, `bassBlast`. |
 | `tv.luna_request(uri, params)` | Escape hatch: call any `luna://` endpoint. |
 
 Categories, keys and values: see [SETTINGS.md](SETTINGS.md).
@@ -108,7 +111,7 @@ Categories, keys and values: see [SETTINGS.md](SETTINGS.md).
 | Method | Description |
 |---|---|
 | `tv.apply_profile(path_or_dict, dry_run=False)` | Apply a whole TV state from a `.toml` file (or a parsed dict). Returns the list of steps taken. |
-| `tv.capture_profile(name=None)` | Read the current input/volume/picture/sound into a profile dict. |
+| `tv.capture_profile(name=None)` | Read the current input/volume/picture/sound into a profile dict. Picture captures every readable scalar key (`lgtvpy.tv.PICTURE_KEYS_EXTENDED`), falling back to the basic set on older firmware. |
 
 The `lgtvpy.profiles` module has the underlying helpers: `load(path)`, `validate(profile)`, `plan(profile)` (human-readable steps, no TV needed), `apply(tv, profile, dry_run=False, settle=0.4)`, `capture(tv, name=None)`, and `dumps(profile)` (serialise back to TOML).
 
@@ -129,8 +132,11 @@ Profile schema and the two-phase picture-mode behaviour are documented in the mo
 
 | Method | Description |
 |---|---|
-| `tv.system_info()` | Model name, firmware branch. |
-| `tv.software_info()` | Firmware details; `device_id` = TV MAC address. |
+| `tv.system_info()` | Model name, serial, receiver type. On webOS 25+ the copy captured during the connection handshake is returned. |
+| `tv.software_info()` | Firmware details; `device_id` = TV MAC address. Refused on webOS 26 (reduced-permission pairing). |
+| `tv.connection_info()` | Wired and Wi-Fi MAC addresses. |
+| `tv.hello_info()` | What the TV announced on connect: webOS version (`deviceOSReleaseVersion`), supported `pairingTypes`. |
+| `tv.signed_pairing` | `False` if the TV only accepted the reduced-permission (unsigned) pairing. |
 | `tv.status()` | One-call summary (power/app/volume/mute/output). |
 | `tv.request(uri, payload=None)` | Any raw `ssap://` request. |
 

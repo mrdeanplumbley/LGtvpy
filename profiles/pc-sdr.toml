@@ -1,4 +1,4 @@
-# Apply with:  lgtv profile apply profiles/pc-desktop.toml
+# Apply with:  lgtv profile apply profiles/pc-sdr.toml
 #
 # Priorities here are flat, predictable brightness and no auto-dimming, since
 # nothing is worse than the panel shifting under you mid-session. Expert (Dark

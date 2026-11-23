@@ -29,7 +29,9 @@ Application order: ``input`` -> each category table -> ``volume`` -> ``mute``
 -> ``sound_output`` -> ``notify``. Within a category that names a *mode*
 (``pictureMode`` / ``soundMode``) alongside other keys, the mode is applied
 first in its own call - otherwise switching mode reloads that mode's stored
-values and clobbers the keys you set (verified on webOS 25).
+values and clobbers the keys you set (verified on webOS 25). Per-app picture
+keys (``truMotionMode``) then go in a final write flagged ``current_app``
+(see :meth:`lgtvpy.tv.LGTV.set_settings`).
 """
 
 from __future__ import annotations
@@ -170,8 +172,12 @@ def _apply_category(tv, category: str, settings: dict, settle: float) -> None:
 
 
 def capture(tv, name: str = None) -> Profile:
-    """Read the TV's current input/volume/picture/sound into a profile dict."""
-    from .tv import PICTURE_KEYS
+    """Read the TV's current input/volume/picture/sound into a profile dict.
+
+    Picture captures every readable scalar key (PICTURE_KEYS_EXTENDED); if
+    older firmware refuses that request it retries with the basic set.
+    """
+    from .tv import PICTURE_KEYS, PICTURE_KEYS_EXTENDED
 
     profile: Profile = {}
     if name:
@@ -190,11 +196,15 @@ def capture(tv, name: str = None) -> Profile:
         pass
 
     picture = {}
-    try:
-        for key, value in tv.get_picture_settings(PICTURE_KEYS).items():
-            picture[key] = _coerce(value)
-    except LGTVError:
-        pass
+    for keys in (PICTURE_KEYS_EXTENDED, PICTURE_KEYS):
+        try:
+            current = tv.get_picture_settings(keys)
+        except LGTVError:
+            continue
+        for key, value in current.items():
+            if not isinstance(value, (dict, list)):  # profiles hold scalars only
+                picture[key] = _coerce(value)
+        break
     if picture:
         profile["picture"] = picture
 
